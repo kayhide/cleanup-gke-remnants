@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+# Script to cleanup ophaned resources when gke with gce ingress controller is deleted.
+# For more details, see the GitHub issue:
+# https://github.com/kubernetes/ingress-gce/issues/136
+
+set -eu
+
+list() {
+    echo "* Forwarding rules"
+    gcloud compute forwarding-rules list
+    echo
+
+    echo "* Target http proxies"
+    gcloud compute target-http-proxies list
+    echo
+
+    echo "* Url maps"
+    gcloud compute url-maps list
+    echo
+
+    echo "* Backend services"
+    gcloud compute backend-services list
+    echo
+
+    echo "* Instance groups"
+    gcloud compute instance-groups list --filter "MANAGED = No"
+    echo
+
+    echo "* Health checks"
+    gcloud compute health-checks list
+    echo
+
+    echo "* Firewall rules"
+    gcloud compute firewall-rules list
+    echo
+}
+
+delete() {
+    echo "* Forwarding rules"
+    # TODO Remove non-global items as well.
+    gcloud compute forwarding-rules list --format "get(name)" |while read -r x; do (gcloud compute forwarding-rules delete --global -q "$x" || true); done
+    echo
+
+    echo "* Target http proxies"
+    gcloud compute target-http-proxies list --format "get(name)" |while read -r x; do (gcloud compute target-http-proxies delete -q "$x" || true); done
+    echo
+
+    echo "* Url maps"
+    gcloud compute url-maps list --format "get(name)" |while read -r x; do (gcloud compute url-maps delete -q "$x" || true); done
+    echo
+
+    echo "* Backend services"
+    gcloud compute backend-services list --format "get(name)" |while read -r x; do (gcloud compute backend-services delete --global -q "$x" || true); done
+    echo
+
+    echo "* Instance groups"
+    gcloud compute instance-groups list --filter "MANAGED = No" --format "get(name)" |while read -r x; do (gcloud compute instance-groups unmanaged delete -q "$x" || true); done
+    echo
+
+    echo "* Health checks"
+    gcloud compute health-checks list --format "get(name)" |while read -r x; do (gcloud compute health-checks delete -q "$x" || true); done
+    echo
+
+    echo "* Firewall rules"
+    gcloud compute firewall-rules list --format "get(name)" |while read -r x; do (gcloud compute firewall-rules delete -q "$x" || true); done
+    echo
+}
+
+usage() {
+    cat <<EOF
+Usage: cleanup-gke-remnants COMMAND
+
+Available commands:
+  list
+  delete
+
+EOF
+}
+
+case ${1:-} in
+    list)
+        list
+        ;;
+
+    delete)
+        delete
+        ;;
+
+    "")
+        usage
+        ;;
+
+    *)
+        >&2 echo "Invalid command: $1"
+        usage
+        exit 1
+        ;;
+esac
